@@ -49,14 +49,23 @@ function App() {
   };
 
   // 다음 Agent 응답 찾기 (chatData 배열 순서대로)
+  // chatData.json 구조: 고객 메시지 → Agent 메시지 순서
+  // 사용자가 메시지를 보내면, 그 다음에 나오는 Agent 메시지를 반환
   const findNextAgentResponse = () => {
     const data = chatDataRef.current;
-    let currentIndex = chatDataIndexRef.current;
+    const currentIndex = chatDataIndexRef.current;
+
+    // 현재 인덱스가 배열 범위를 벗어나면 null 반환
+    if (currentIndex >= data.length) {
+      return null;
+    }
 
     // 현재 인덱스부터 다음 Agent 메시지 찾기
+    // 고객 메시지는 건너뛰고 Agent 메시지만 찾음
     for (let i = currentIndex; i < data.length; i++) {
-      if (data[i].speaker === 'Agent') {
-        chatDataIndexRef.current = i + 1; // 다음 인덱스로 업데이트
+      if (data[i] && data[i].speaker === 'Agent') {
+        // 다음 처리할 인덱스로 업데이트 (Agent 메시지 다음)
+        chatDataIndexRef.current = i + 1;
         return data[i];
       }
     }
@@ -74,37 +83,87 @@ function App() {
       text: text.trim(),
     };
 
+    // 사용자 메시지 추가
     setMessages((prevMessages) => {
-      const updatedMessages = [...prevMessages, newUserMessage];
-      nextMessageIdRef.current += 1;
+      return [...prevMessages, newUserMessage];
+    });
+    nextMessageIdRef.current += 1;
 
-      // 2초 후 Agent 응답 추가
+    // Agent 응답 추가 함수 (재귀적으로 연속 Agent 메시지 처리)
+    const addAgentResponse = (delay = 2000) => {
       setIsProcessing(true);
       setTimeout(() => {
-        const nextAgentResponse = findNextAgentResponse();
-        if (nextAgentResponse) {
-          setMessages((currentMessages) => {
+        try {
+          // 현재 인덱스에서 다음 Agent 메시지 찾기
+          const nextAgentResponse = findNextAgentResponse();
+          if (nextAgentResponse) {
             const agentMessage = {
               ...nextAgentResponse,
               id: nextMessageIdRef.current,
             };
             nextMessageIdRef.current += 1;
 
+            setMessages((currentMessages) => {
+              return [...currentMessages, agentMessage];
+            });
+
+            // 다음 chatData 항목 확인
+            const data = chatDataRef.current;
+            const nextIndex = chatDataIndexRef.current;
+            const isNextCustomerMessage = nextIndex < data.length && data[nextIndex] && data[nextIndex].speaker === '고객';
+            const isNextAgentMessage = nextIndex < data.length && data[nextIndex] && data[nextIndex].speaker === 'Agent';
+
+            // 다음 Agent 메시지의 delay 확인 (있으면 사용, 없으면 기본 2000ms)
+            const nextAgentDelay = isNextAgentMessage && data[nextIndex] && data[nextIndex].delay ? data[nextIndex].delay : 2000;
+
             // Agent 메시지가 thinking을 가지고 있으면 자동 선택
             if (agentMessage.thinking) {
-              setTimeout(() => {
+              // 다음 항목이 고객 메시지면 thinking 블록 선택을 즉시 처리하고 입력 대기 모드로 전환
+              if (isNextCustomerMessage) {
                 setSelectedMessageId(agentMessage.id);
-              }, 100);
+                setIsProcessing(false);
+              } else if (isNextAgentMessage) {
+                // 다음 항목이 Agent 메시지면 thinking 블록 선택 후 연속으로 추가
+                setTimeout(() => {
+                  setSelectedMessageId(agentMessage.id);
+                }, 100);
+                // isProcessing은 다음 Agent 메시지 추가 시 true로 설정됨
+                addAgentResponse(nextAgentDelay);
+              } else {
+                // 다음 항목이 없으면 기존대로 처리
+                setTimeout(() => {
+                  setSelectedMessageId(agentMessage.id);
+                }, 100);
+                setIsProcessing(false);
+              }
+            } else {
+              // thinking이 없으면 다음 항목 확인
+              if (isNextAgentMessage) {
+                // 다음 항목이 Agent 메시지면 연속으로 추가 (delay 속성 사용)
+                // isProcessing은 addAgentResponse 내부에서 true로 설정됨
+                // 현재 isProcessing이 true 상태이므로 유지
+                addAgentResponse(nextAgentDelay);
+              } else if (isNextCustomerMessage) {
+                // 다음 항목이 고객 메시지면 입력 대기 모드로 전환
+                setIsProcessing(false);
+              } else {
+                // 다음 항목이 없으면 입력 대기 모드로 전환
+                setIsProcessing(false);
+              }
             }
-
-            return [...currentMessages, agentMessage];
-          });
+          } else {
+            // 더 이상 Agent 응답이 없으면 입력 대기 모드로 전환
+            setIsProcessing(false);
+          }
+        } catch (error) {
+          console.error('Error in addAgentResponse:', error);
+          setIsProcessing(false);
         }
-        setIsProcessing(false);
-      }, 2000);
+      }, delay);
+    };
 
-      return updatedMessages;
-    });
+    // 첫 번째 Agent 응답 추가 시작
+    addAgentResponse(2000);
   };
 
   if (loading) {
