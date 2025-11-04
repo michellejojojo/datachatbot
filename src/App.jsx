@@ -110,11 +110,12 @@ function App() {
             // 다음 chatData 항목 확인
             const data = chatDataRef.current;
             const nextIndex = chatDataIndexRef.current;
-            const isNextCustomerMessage = nextIndex < data.length && data[nextIndex] && data[nextIndex].speaker === '고객';
-            const isNextAgentMessage = nextIndex < data.length && data[nextIndex] && data[nextIndex].speaker === 'Agent';
+            const nextItem = nextIndex < data.length ? data[nextIndex] : null;
+            const isNextCustomerMessage = nextItem && nextItem.speaker === '고객';
+            const isNextAgentMessage = nextItem && nextItem.speaker === 'Agent';
 
             // 다음 Agent 메시지의 delay 확인 (있으면 사용, 없으면 기본 2000ms)
-            const nextAgentDelay = isNextAgentMessage && data[nextIndex] && data[nextIndex].delay ? data[nextIndex].delay : 2000;
+            const nextAgentDelay = isNextAgentMessage && nextItem.delay ? nextItem.delay : 2000;
 
             // Agent 메시지가 thinking을 가지고 있으면 자동 선택
             if (agentMessage.thinking) {
