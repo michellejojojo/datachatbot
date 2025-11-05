@@ -22,11 +22,35 @@ function App() {
   useEffect(() => {
     try {
       setLoading(true);
-      // 초기 메시지는 비어있음 (사용자가 시작)
-      setMessages([]);
       setError(null);
       nextMessageIdRef.current = 1;
-      chatDataIndexRef.current = 0;
+      
+      // 초기 Agent 인사말 자동 표시
+      // chatData.json의 첫 번째 Agent 메시지(id: 2) 찾기
+      const firstAgentMessage = chatDataRef.current.find((msg) => msg.speaker === 'Agent');
+      
+      if (firstAgentMessage) {
+        const initialMessage = {
+          ...firstAgentMessage,
+          id: nextMessageIdRef.current,
+        };
+        nextMessageIdRef.current += 1;
+        
+        setMessages([initialMessage]);
+        
+        // thinking이 있으면 자동 선택
+        if (initialMessage.thinking) {
+          setSelectedMessageId(initialMessage.id);
+        }
+        
+        // chatDataIndexRef를 첫 Agent 메시지 다음 위치로 설정
+        const firstAgentIndex = chatDataRef.current.findIndex((msg) => msg.id === firstAgentMessage.id);
+        chatDataIndexRef.current = firstAgentIndex + 1;
+      } else {
+        // Agent 메시지가 없으면 빈 배열로 시작
+        setMessages([]);
+        chatDataIndexRef.current = 0;
+      }
     } catch (err) {
       console.error('Failed to load chat data:', err);
       setError('데이터를 불러오는데 실패했습니다.');
